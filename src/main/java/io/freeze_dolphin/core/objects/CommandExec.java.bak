@@ -1,0 +1,285 @@
+package me.freeze_dolphin.core.objects;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import me.freeze_dolphin.core.interfaces.CommandRunnable;
+import me.freeze_dolphin.core.utils.StringUtils;
+import me.freeze_dolphin.core.utils.SystemUtils;
+
+import org.apache.commons.lang3.tuple.Pair;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+
+public class CommandExec implements CommandExecutor {
+
+	private Map<String, Pair<String[], CommandRunnable.NormalRunnable>> storage = new HashMap<>();
+	private final DefaultNode defaultNode;
+	private final CommandRunnable.ArgumentNotMatchRunnable illegal;
+
+	public static class DefaultNode {
+
+		private final Pair<String[], CommandRunnable.EmptyArgumentRunnable> empty;
+
+		public DefaultNode(String permissionNode, String noPermissionWarning, CommandRunnable.EmptyArgumentRunnable behavior) {
+			this.empty = Pair.of(new String[] {permissionNode, noPermissionWarning}, behavior);
+		}
+
+	}
+
+	/**
+	 * Add a node
+	 * 
+	 * @param commandNode This must be in this format: arg1.arg2.arg3. ... .<*> e.g.: command "/skywars start FloatingIslandMap Player1 Player2 ... PlayerN" should be "start.FloatingIslandMap.<*>"
+	 * Please note that using dot('.') as the split symbol means that you cannot use the dot in the arguments
+	 * @param permissionNode The permission to run this command
+	 * @param noPermissionWarning This message will be sent while the CommandSender do not have the permission above
+	 * @param behavior What to do when perform the command successfully
+	 */
+	public void addNode(String commandNode, String permissionNode, String noPermissionWarning, CommandRunnable.NormalRunnable behavior) {
+		this.storage.put(commandNode, Pair.of(new String[] {permissionNode, noPermissionWarning}, behavior));
+	}
+
+	public CommandExec(DefaultNode defaultNode, CommandRunnable.ArgumentNotMatchRunnable executeWhenArgumentNotMatch) {
+		this.defaultNode = defaultNode;
+		this.illegal = executeWhenArgumentNotMatch;
+	}
+
+	@Override
+	public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+
+		SystemUtils.debug("Perform Command: " + cmd.getName() + " | " + label + " | " + StringUtils.arrayToString(args));
+		SystemUtils.debug("Global Storage: " + StringUtils.mapToString(storage));
+		SystemUtils.debug("Global Storage KeySet: " + StringUtils.arrayToString(storage.keySet().toArray(new String[storage.keySet().size()])));
+
+		if (args.length == 0) {
+
+			String permission = defaultNode.empty.getLeft()[0];
+			String noPermissionMessage = defaultNode.empty.getLeft()[1];
+			CommandRunnable.EmptyArgumentRunnable emptyB = defaultNode.empty.getRight();
+
+			if (permission.equalsIgnoreCase("op") ? sender.isOp() : (permission.equals("") ? true : sender.hasPermission(permission))) {
+				return emptyB.run(sender, cmd, label);
+			} else {
+				sender.sendMessage(noPermissionMessage);
+
+			}
+		}
+
+		boolean superMatch = false;
+		outerA:
+			for (String s : storage.keySet()) {
+
+				SystemUtils.debug("Regex Replacer Displayer: " + s.replaceAll("\\.<\\*>", ""));
+
+				if (s.replaceAll("(\\.<\\*>)", "").equals(s)) {
+					CommandRunnable.ArgumentNotMatchRunnable notMatch = null;
+					notMatch = illegal;
+					boolean match = false;
+					StringBuilder sb = new StringBuilder();
+					for (String a : args) {
+						sb.append(a).append(".");
+					}
+					sb.deleteCharAt(sb.length() - 1);
+
+					SystemUtils.debug("StringBuilder: " + sb.toString());
+
+					outerB: 
+						for (String ss : storage.keySet()) {
+							if (sb.toString().equals(ss)) {
+								Pair<String[], CommandRunnable.NormalRunnable> p = storage.get(ss);
+								match = true;
+								String permission = p.getLeft()[0];
+
+								SystemUtils.debug("Storage - CommandNode: " + ss);
+								SystemUtils.debug("Permission: " + permission);
+
+								if (permission.equalsIgnoreCase("op") ? sender.isOp() : (permission.equals("") ? true : sender.hasPermission(permission))) {
+									return p.getRight().run(sender, cmd, label, args, args);
+								} else {
+									sender.sendMessage(p.getLeft()[1]);
+								}
+								break outerB;
+							}
+						}
+
+					if (!match) { return notMatch.run(sender); }
+					// return true;
+
+				}
+
+				List<String> argsL = Arrays.asList(args);
+				String[] argsF = s.replaceAll("\\.<\\*>", "").split("\\.");
+				// List<String> argsF = Arrays.asList(argsFA);
+
+				SystemUtils.debug("Progress Displayer: MultiArguments Type" + " | " + s + " | " + StringUtils.arrayToString(argsF));
+
+				boolean match = true;
+				int index = 0;
+				for (String ss : argsF) {
+
+					SystemUtils.debug("Argument Displayer: " + argsF[index] + " | " + argsL.get(index));
+
+					if (!ss.equals(argsL.get(index))) {
+						match = false;
+						continue outerA;
+					}
+					index++;
+				}
+
+				/*
+				while (index < argsF.size()) {
+
+					SystemUtils.debug("Argument Displayer: " + argsF.get(index) + " | " + argsL.get(index));
+
+					if (!argsF.get(index).equals(argsL.get(index))) {
+						match = false;
+						break;
+					}
+					index++;
+				}
+				 */
+
+				if (match) {
+					superMatch = true;
+					Pair<String[], CommandRunnable.NormalRunnable> p = storage.get(s);
+					String permission = p.getLeft()[0];
+
+					SystemUtils.debug("Storage - CommandNode: " + s);
+					SystemUtils.debug("Permission: " + permission);
+
+					if (permission.equalsIgnoreCase("op") ? sender.isOp() : (permission.equals("") ? true : sender.hasPermission(permission))) {
+						return p.getRight().run(sender, cmd, label, argsF, StringUtils.divideBy(args, argsF));
+					} else {
+						sender.sendMessage(p.getLeft()[1]);
+						break outerA;
+					}
+				}
+			}
+		if (!superMatch) { return illegal.run(sender); }
+		return true;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	/*
+	public enum CommandExecType {
+		SIMPLE_COMMAND_EXECUTOR,
+		MULTI_ARGUMENTS_EXECUTOR
+	}
+	 */
+
+	/*
+	public CommandExec(JavaPlugin plug, String cmdLabel, CommandExecType type) throws InstantiationException, IllegalAccessException {
+		Class<?> executor = null;
+		switch (type) {
+		case SIMPLE_COMMAND_EXECUTOR: 
+			executor = SimpleCommandExec.class;
+			break;
+		case MULTI_ARGUMENTS_EXECUTOR: 
+			executor = MultiArgumentsExec.class;
+			break;
+		}
+		plug.getCommand(cmdLabel).setExecutor((CommandExecutor) executor.newInstance());
+	}
+	 */
+
+	/*
+	public static class SimpleCommandExec implements CommandExecutor {
+
+		private Map<String, Triple<String[], CommandRunnable.FunctionalArgumentNotMatchRunnable, CommandRunnable.SimpleRunnable>> storage = new HashMap<>();
+
+		/**
+	 * Add a functional command node
+	 * 
+	 * @param commandNode This must be in this format: arg1.arg2.arg3. ... e.g.: command "/skywars start FloatingIslandMap" should be "start.FloatingIslandMap"
+	 * Please note that using dot('.') as the split symbol means that you cannot use the dot in the arguments
+	 * @param permissionNode The permission to run this command
+	 * @param noPermissionWarning This message will be sent while the CommandSender do not have the permission above
+	 * @param behavior What to do when perform the command successfully
+		(*)/
+		public void addSimpleNode(String commandNode, String permissionNode, String noPermissionWarning, CommandRunnable.FunctionalArgumentNotMatchRunnable argumentsNotMatchWarning, CommandRunnable.SimpleRunnable behavior) {
+			this.storage.put(commandNode, Triple.of(new String[] {permissionNode, noPermissionWarning}, argumentsNotMatchWarning, behavior));
+		}
+
+		@Override
+		public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+			CommandRunnable.FunctionalArgumentNotMatchRunnable notMatch = null;
+			boolean match = false;
+			for (String s : storage.keySet()) {
+				Triple<String[], CommandRunnable.FunctionalArgumentNotMatchRunnable, CommandRunnable.SimpleRunnable> p = storage.get(s);
+				notMatch = p.getMiddle();
+				StringBuilder sb = new StringBuilder();
+				for (String a : args) {
+					sb.append(a).append(".");
+				}
+				sb.deleteCharAt(sb.length() - 1);
+				if (sb.toString().equals(s)) {
+					String permission = p.getLeft()[0];
+					match = true;
+					if (permission.equalsIgnoreCase("op") ? sender.isOp() : (permission.equals("") ? true : sender.hasPermission(permission))) {
+						return p.getRight().run(sender, cmd, label, args);
+					} else {
+						sender.sendMessage(p.getLeft()[1]);
+					}
+				}
+			}
+
+			if (!match) { return notMatch.run(sender); }
+
+			return false;
+		}
+	}
+	 */
+
+	/*
+	public static class MultiArgumentsExec  {
+
+
+	}
+	 */
+
+}

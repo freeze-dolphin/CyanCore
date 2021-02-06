@@ -1,0 +1,6 @@
+name: CyanCore
+main: io.freeze_dolphin.cyancore.Core
+version: ${project.version}
+author: Freeze_Dolphin
+depend:
+- CS-CoreLib
