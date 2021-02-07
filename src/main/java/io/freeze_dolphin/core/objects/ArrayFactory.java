@@ -8,7 +8,8 @@ public class ArrayFactory<T> {
 	public ArrayFactory() {
 	}
 
-	public List<T> produce(@SuppressWarnings("unchecked") T... obj) {
+	@SuppressWarnings("unchecked")
+	public List<T> produce(T... obj) {
 		List<T> al = new ArrayList<>();
 		for (T t : obj) {
 			al.add(t);
